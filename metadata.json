@@ -1,8 +1,8 @@
 {
-  "name": "Custom Assistant Example",
+  "name": "Project Daedalus: AI Authoring Toolkit",
   "type": "helper",
   "properties": {
-    "user_type": "all", 
+    "user_type": "instructor", 
     "component": "all"
   }
 }
