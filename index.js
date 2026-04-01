@@ -2,23 +2,22 @@
 // (ensures all global variables set in this extension cannot be referenced outside its scope)
 (async function(codioIDE, window) {
 
-  // initialize coachBot client so it's easier to use
+  // ── EXTENSION SETUP ────────────────────────────────────────────────────────
+
+  // Alias for convenience
   const coachAPI = codioIDE.coachBot
 
-  // register(id: unique button id, name: name of button visible in Coach, function: function to call when button is clicked)
+  // Register the top-level entry point for this extension
   coachAPI.register("contentAssistantsMenuButton", "Content Assistants Menu", showMenuButtons)
 
-  // function called when I have a question button is pressed
-  async function showMenuButtons() {
-
+  function showMenuButtons() {
     coachAPI.showButton("1. Generate Learning Objectives", onAssistantOneButtonPress)
     coachAPI.showButton("2. Generate Alt Text for All Images", onAssistantTwoButtonPress)
-
   }
 
   async function onAssistantOneButtonPress() {
     coachAPI.showThinkingAnimation()
-    coachAPI.write("Learning Objectives Generated")
+    await generateLearningObjectives()
     coachAPI.hideThinkingAnimation()
     showMenuButtons()
   }
@@ -26,16 +25,174 @@
   async function onAssistantTwoButtonPress() {
     coachAPI.showThinkingAnimation()
     await startAltTextGeneration()
-    coachAPI.write("Alt Text Generated")
     coachAPI.hideThinkingAnimation()
     showMenuButtons()
   }
 
-  // Refer to Anthropic's guide on system prompts here: https://docs.anthropic.com/claude/docs/system-prompts
+
+  // ── ASSISTANT 1: LEARNING OBJECTIVES ───────────────────────────────────────
+
+  // Refer to Anthropic's guide on system prompts: https://docs.anthropic.com/claude/docs/system-prompts
+  const learningObjSystemPrompt = `
+  You are a helpful teaching assistant.
+  Your task is to generate learning objectives for an assignment using the following template:
+
+  <template>
+    ### Learners will be able to...
+
+    * ### Learning objectives
+    * ### Go here
+    * ### Should read like test question
+
+    |||guidance
+    ## Assumptions
+    [What do we expect the students to already know]
+
+    ## Limitations
+    [What might not be covered, or design decisions made by Codio, ending with a new line character]
+
+    |||
+
+    </template>
+    Note:
+    - Make sure to use the format as a template for the learning objectives you generate.
+    - Make sure there is a new line before the last ||| of the guidance tag.
+    - Make sure all the bullet points start with a ### for bold markdown formatting as per the template provided.
+    - Do not stray away from the template and respond with the learning objectives page inside the <learning_objectives> tag.
+    `
+
+  const learningObjectivesPrompt = `
+    Here is the assignment content. Read it carefully and generate the learning objectives page:
+
+    <assignment_content>
+    {{CONTENT}}
+    </assignment_content>
+
+    Note:
+    - Keep the bullet points to 1-5 learning objectives that cover all the pages in the assignment content.
+    - Make sure all the bullet points start with a ### for markdown formatting as per the template provided.
+    `
+
+  // Fetches all guide pages except any that are (or look like) an existing learning objectives page.
+  // Returns an object keyed by index with { title, id, content } for each qualifying page.
+  async function fetchAssignmentPages() {
+    // Skip pages whose titles match any of these patterns — they're already LO pages
+    const excludedKeywords = [
+      "learning objectives", "learning_objectives", "LearningObjectives", "Learning_Objectives", "learning-objectives",
+      "Learning-Objectives", "LearningObjectives---", "Objectives_Learning", "Objectives-Learning", "learningobjectives",
+      "LO_", "LO-", "Learning_Obj", "LearningObj", "Objectives", "LOs"
+    ]
+
+    let guidesStructure
+    try {
+      guidesStructure = await window.codioIDE.guides.structure.getStructure()
+      console.log("This is the Guides structure", guidesStructure)
+    } catch (e) {
+      console.error(e)
+    }
+
+    const findPagesFilter = (obj) => {
+      if (!obj || typeof obj !== 'object') return [];
+      return [
+        ...(obj.type === 'page' ? [obj] : []),
+        ...Object.values(obj).flatMap(findPagesFilter)
+      ];
+    };
+
+    const assignmentPages = findPagesFilter(guidesStructure)
+    console.log("pages", assignmentPages)
+
+    const guidePages = {}
+    for (const element_index in assignmentPages) {
+      const pageTitle = assignmentPages[element_index].title
+      if (excludedKeywords.some(keyword => pageTitle.includes(keyword))) continue
+
+      const page_id = assignmentPages[element_index].id
+      const pageData = await codioIDE.guides.structure.get(page_id)
+      guidePages[element_index] = { title: pageTitle, id: page_id, content: pageData.settings.content }
+    }
+
+    console.log("guide pages", guidePages)
+    return guidePages
+  }
+
+  // Calls the LLM and extracts content between the given XML tags in the response
+  async function fetchLLMResponseXMLTagContents(systemPrompt, userPrompt, xml_tag) {
+    const result = await codioIDE.coachBot.ask(
+      {
+        systemPrompt: systemPrompt,
+        messages: [{ "role": "user", "content": userPrompt }]
+      },
+      { stream: false, preventMenu: true }
+    )
+    console.log("response", result.result)
+
+    const startIndex = result.result.indexOf(`<${xml_tag}>`) + `<${xml_tag}>`.length
+    const endIndex = result.result.lastIndexOf(`</${xml_tag}>`)
+
+    return result.result.substring(startIndex, endIndex)
+  }
+
+  // Inserts a new page at the top of the guide (root parent, first position)
+  async function addPageToGuide(title, content) {
+    let newPage
+    try {
+      newPage = await window.codioIDE.guides.structure.add({
+        title: title,
+        type: window.codioIDE.guides.structure.ITEM_TYPES.PAGE,
+        content: content,
+        layout: window.codioIDE.guides.structure.LAYOUT.L_1_PANEL,
+        closeAllTabs: true,
+        showFileTree: false
+      }, null, 0)  // null = root parent, 0 = first position
+      console.log('Page added ->', newPage)
+    } catch (e) {
+      console.error(e)
+    }
+    return newPage
+  }
+
+  async function generateLearningObjectives() {
+    const guidePages = await fetchAssignmentPages()
+
+    // Concatenate all page content into a single string for LLM context
+    let concatenatedPages = ""
+    for (const pageData of Object.values(guidePages)) {
+      concatenatedPages += pageData.content
+    }
+    console.log(concatenatedPages)
+
+    codioIDE.coachBot.write(`Generating Learning Objectives ... please wait...`)
+    const userPrompt = learningObjectivesPrompt.replace('{{CONTENT}}', concatenatedPages)
+
+    const generatedContent = await fetchLLMResponseXMLTagContents(learningObjSystemPrompt, userPrompt, "learning_objectives")
+    console.log("Generated Learning Objective result", generatedContent)
+
+    await addPageToGuide('Learning Objectives', generatedContent)
+
+    codioIDE.coachBot.write(`Learning Objectives page generated successfully!`)
+    codioIDE.coachBot.showMenu()
+  }
+
+
+  // ── ASSISTANT 2: ALT TEXT GENERATION ───────────────────────────────────────
+
+  // Config
+  // Refer to Anthropic's guide on system prompts: https://docs.anthropic.com/claude/docs/system-prompts
   const altTextGenSystemPrompt = "You are a helpful assistant with an expertise at writing alt text for images. Your response must always be in plain English, a sentence or a paragraph of 3-4 sentences, with no new lines and no bullet points."
 
-  // AWS Lambda function URL
+  // AWS Lambda function URL (handles Claude API calls server-side)
   const lambdaUrl = 'https://wrib7ayaikuoognvwh4xjlqtim0zunnd.lambda-url.us-east-2.on.aws/';
+
+  // Image parsing utilities
+
+  // Generic or filename-like alt text is treated as missing — threshold of 100 chars filters out short placeholder values
+  const GENERIC_ALT_TERMS = /^(image|img|photo|picture|pic|screenshot|screen shot|figure|fig|graphic|icon|logo|banner|thumbnail|thumb|placeholder|untitled)$/i
+  const FILENAME_PATTERN = /^[\w\-]+\.\w{2,5}$/
+
+  // Detect both markdown `![]()` and HTML `<img>` image syntax
+  const markdownPattern = /!\[.*?\]\(.*?\)/g
+  const htmlImgPattern = /<img\s+[^>]*?src\s*=\s*(['"])(.*?)\1[^>]*?\/?>/gi
 
   function getMediaType(filePath) {
     const baseName = filePath.split(/[\\/]/).pop() || '';
@@ -57,13 +214,10 @@
     }
   }
 
-  const GENERIC_ALT_TERMS = /^(image|img|photo|picture|pic|screenshot|screen shot|figure|fig|graphic|icon|logo|banner|thumbnail|thumb|placeholder|untitled)$/i
-  const FILENAME_PATTERN = /^[\w\-]+\.\w{2,5}$/
-
   function isMeaningfulAltText(altText) {
     const trimmed = altText.trim()
     if (trimmed.length === 0) return false
-    if (trimmed.length < 100) return false
+    if (trimmed.length < 100) return false   // short strings are likely placeholders, not real descriptions
     if (GENERIC_ALT_TERMS.test(trimmed)) return false
     if (FILENAME_PATTERN.test(trimmed)) return false
     return true
@@ -73,10 +227,7 @@
     return /^https?:\/\/|^\/\//.test(src)
   }
 
-  // Regex patterns for image detection
-  const markdownPattern = /!\[.*?\]\(.*?\)/g
-  const htmlImgPattern = /<img\s+[^>]*?src\s*=\s*(['"])(.*?)\1[^>]*?\/?>/gi
-
+  // Finds all images on a page (markdown and HTML) and returns a unified descriptor array
   function normalizeImageMatches(pageContent) {
     const results = []
 
@@ -104,20 +255,20 @@
     return results
   }
 
+  // Reconstructs the image string (markdown or HTML) with the new alt text inserted
   function buildReplacement(descriptor, newAltText) {
     if (descriptor.type === 'markdown') {
       return `![${newAltText}](${descriptor.filepath})`
     }
 
-    // HTML img tag
     const tag = descriptor.originalString
     if (/alt\s*=\s*(['"]).*?\1/i.test(tag)) {
-      // Replace existing alt attribute value
       return tag.replace(/alt\s*=\s*(['"]).*?\1/i, `alt="${newAltText}"`)
     }
-    // Insert alt attribute after <img
     return tag.replace(/<img/i, `<img alt="${newAltText}"`)
   }
+
+  // Guide fetching
 
   async function fetchGuidePages() {
     const guidesStructure = await codioIDE.guides.structure.getStructure()
@@ -133,6 +284,8 @@
 
     return findPagesFilter(guidesStructure)
   }
+
+  // Lambda communication
 
   async function callLambdaWithRetry(urlWithParams, options, filepath) {
     const maxRetries = 3;
@@ -157,6 +310,8 @@
       }
     }
   }
+
+  // Image processing
 
   // Returns { status: 'replaced', replacement } | { status: 'skipped_external' } | { status: 'skipped_alt_exists' }
   // Throws on unrecoverable errors so Promise.allSettled can catch them.
@@ -262,6 +417,7 @@
     codioIDE.coachBot.write(`Found ${matches.length} images on this page!`);
     codioIDE.coachBot.showThinkingAnimation()
 
+    // Use allSettled so a single failing image doesn't abort the rest of the page
     const results = await Promise.allSettled(matches.map(async (match, index) => {
       const matchNumber = index + 1
       console.log(`This is match object ${matchNumber}: ${match.originalString}`)
@@ -327,6 +483,8 @@
     }
   }
 
+  // Orchestrator
+
   async function startAltTextGeneration() {
     codioIDE.coachBot.write(`Generating alt text for ya my bestie... give me a sec and I'll get started!`);
     codioIDE.coachBot.showThinkingAnimation()
@@ -362,6 +520,7 @@
     codioIDE.coachBot.hideThinkingAnimation()
     codioIDE.coachBot.write(summary);
   }
+
 
 // calling the function immediately by passing the required variables
 })(window.codioIDE, window)
