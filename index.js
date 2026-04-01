@@ -16,16 +16,12 @@
   }
 
   async function onAssistantOneButtonPress() {
-    coachAPI.showThinkingAnimation()
     await generateLearningObjectives()
-    coachAPI.hideThinkingAnimation()
     showMenuButtons()
   }
 
   async function onAssistantTwoButtonPress() {
-    coachAPI.showThinkingAnimation()
     await startAltTextGeneration()
-    coachAPI.hideThinkingAnimation()
     showMenuButtons()
   }
 
@@ -163,15 +159,15 @@
     console.log(concatenatedPages)
 
     codioIDE.coachBot.write(`Generating Learning Objectives ... please wait...`)
+    coachAPI.showThinkingAnimation()
     const userPrompt = learningObjectivesPrompt.replace('{{CONTENT}}', concatenatedPages)
 
     const generatedContent = await fetchLLMResponseXMLTagContents(learningObjSystemPrompt, userPrompt, "learning_objectives")
     console.log("Generated Learning Objective result", generatedContent)
 
     await addPageToGuide('Learning Objectives', generatedContent)
-
+    coachAPI.hideThinkingAnimation()
     codioIDE.coachBot.write(`Learning Objectives page generated successfully!`)
-    codioIDE.coachBot.showMenu()
   }
 
 
