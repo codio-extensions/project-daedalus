@@ -1,0 +1,25 @@
+{
+  "name": "project-daedalus",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [
+    "codio-extensions"
+  ],
+  "homepage": "https://github.com/codio-extensions/project-daedalus#readme",
+  "bugs": {
+    "url": "https://github.com/codio-extensions/project-daedalus/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codio-extensions/project-daedalus.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "scripts": {
+    "build": "parcel build src/index.js",
+    "start": "parcel serve src/index.js"
+  },
+  "devDependencies": {
+    "parcel": "^2.16.4"
+  }
+}
