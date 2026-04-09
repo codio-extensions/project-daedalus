@@ -24,11 +24,12 @@ jobs:
           npm run build
 
       - name: build artifact
+        working-directory: ./dist
         run: tar -czvf dist.tar.gz index.js
 
       - name: upload artifact
         uses: AButler/upload-release-assets@v3.0
         with:
-          files: "./dist.tar.gz"
+          files: "dist/dist.tar.gz"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           release-tag: ${{ github.event.release.tag_name }}
