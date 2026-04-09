@@ -21,7 +21,7 @@ jobs:
 
       - name: Build index.js
         run: |
-          npm build
+          npm run build
 
       - name: build artifact
         run: tar -czvf dist.tar.gz index.js
