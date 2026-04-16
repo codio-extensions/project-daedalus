@@ -1,0 +1,14 @@
+{
+// Configure your Run and Preview buttons here.
+
+// Run button configuration
+  "commands": {
+        "Node version": "node --version"
+  },
+
+// Preview button configuration
+  "preview": {
+        "Build": "https://{{domain}}/dist/index.js",
+        "Live": "https://{{domain1234}}/index.js"
+  }
+}
