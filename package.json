@@ -17,9 +17,13 @@
   "author": "",
   "scripts": {
     "build": "parcel build src/index.js",
-    "start": "parcel serve src/index.js"
+    "start": "parcel serve src/index.js --log-level verbose",
+    "buildVite": "vite build -w",
+    "startVite": "concurrently \"vite\" \"npm run buildVite\""
   },
   "devDependencies": {
-    "parcel": "^2.16.4"
+    "concurrently": "^9.2.1",
+    "parcel": "^2.16.4",
+    "vite": "^8.0.8"
   }
 }
