@@ -17,7 +17,7 @@
   "author": "",
   "scripts": {
     "build": "parcel build src/index.js",
-    "start": "parcel serve src/index.js --log-level verbose",
+    "start": "parcel serve src/index.js --host 0.0.0.0",
     "buildVite": "vite build -w",
     "startVite": "concurrently \"vite\" \"npm run buildVite\""
   },

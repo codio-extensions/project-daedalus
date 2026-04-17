@@ -9,7 +9,6 @@ import * as ext2 from "./extension-2/index"
 
   // Alias for convenience
   const coachAPI = codioIDE.coachBot
-
   // Register the top-level entry point for this extension
   coachAPI.register("contentAssistantsMenuButton", "Content Assistants Menu", showMenuButtons)
 

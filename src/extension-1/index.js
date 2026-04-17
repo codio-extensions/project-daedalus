@@ -3,7 +3,7 @@ const learningObjSystemPrompt = `
   You are a helpful teaching assistant.
   Your task is to generate learning objectives for an assignment using the following template:
 
-  <template>
+	<template>
     ### Learners will be able to...
 
     * ### Learning objectives
