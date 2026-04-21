@@ -16,14 +16,11 @@
   "license": "ISC",
   "author": "",
   "scripts": {
-    "build": "parcel build src/index.js",
-    "start": "parcel serve src/index.js --host 0.0.0.0",
-    "buildVite": "vite build -w",
-    "startVite": "concurrently \"vite\" \"npm run buildVite\""
+    "build": "vite build -w",
+    "start": "concurrently \"vite\" \"npm run buildVite\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "parcel": "^2.16.4",
     "vite": "^8.0.8"
   }
 }

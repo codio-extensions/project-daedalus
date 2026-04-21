@@ -1,6 +1,6 @@
 // ── ASSISTANT 2: ALT TEXT GENERATION ───────────────────────────────────────
 
-// Config
+// Configaa
 // Refer to Anthropic's guide on system prompts: https://docs.anthropic.com/claude/docs/system-prompts
 const altTextGenSystemPrompt = "You are a helpful assistant with an expertise at writing alt text for images. Your response must always be in plain English, a sentence or a paragraph of 3-4 sentences, with no new lines and no bullet points."
 
