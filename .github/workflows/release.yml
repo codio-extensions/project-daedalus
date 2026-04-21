@@ -1,0 +1,35 @@
+name: Publish New Release
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: install packages
+        run: |
+          npm install
+
+      - name: Build index.js
+        run: |
+          npm run build
+
+      - name: build artifact
+        working-directory: ./dist
+        run: tar -czvf "${{ github.event.release.tag_name }}-dist.tar.gz" index.js
+
+      - name: upload artifact
+        uses: AButler/upload-release-assets@v3.0
+        with:
+          files: "dist/${{ github.event.release.tag_name }}-dist.tar.gz"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          release-tag: ${{ github.event.release.tag_name }}
